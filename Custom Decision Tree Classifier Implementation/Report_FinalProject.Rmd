@@ -1,7 +1,5 @@
 ---
 title: "Report: Custom Decision Tree Classifier Implementation"
-author: '36523348'
-date: "2024-01-10"
 output:
   pdf_document:
     latex_engine: xelatex
