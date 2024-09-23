@@ -1,0 +1,639 @@
+---
+title: "CW2_vA"
+author: "Risham Hussain"
+date: "2024-04-30"
+output: html_document
+---
+
+### Libraries
+
+```{r setup, echo=FALSE}
+### Libraries
+library(tidyverse)
+library(scales)
+library(RColorBrewer)
+library(dplyr)
+library(Information)
+library(pROC)
+library(bestglm)
+library(rpart)
+library(rpart.plot)
+library(plotrix)
+library(cluster)
+library(greybox)
+library(class)
+library(caret)
+```
+
+### Load Data and Order
+
+```{r}
+
+data <- read.csv("36523348_train.csv", stringsAsFactors = TRUE)
+Test_data <- read.csv("36523348_test.csv", stringsAsFactors = TRUE)
+
+dim(data)
+names(data)
+
+# Reordering to get "Exited" at last
+data <- cbind(data[,1:10], data[,12:15], data$Exited)
+names(data)[15] <- "Exited"
+
+Test_data <- cbind(Test_data[,1:10], Test_data[,12:15], Test_data$Exited)
+names(Test_data)[15] <- "Exited"
+
+
+data$IsActiveMember <- factor(data$IsActiveMember)
+data$HasCrCard <- factor(data$HasCrCard)
+data$Satisfaction.Score <- factor(data$Satisfaction.Score)
+data$NumOfProducts <- factor(data$NumOfProducts)
+#data$Tenure <- factor(data$Tenure)
+summary(data)
+
+
+```
+
+### Data selection or subsets
+
+```{r}
+
+# Create the scatter plot
+colnames_full <- colnames(data)
+colnames_abb <- c("CS", "Geo", "Gen", "Age", "Tenure", "Bal", "NoPr", "HasCrC", "IsActive", "EstSal", "Comp", "Satis", "CrType", "Points", "Exited")
+colnames(data) <- colnames_abb
+spread(data)
+
+colnames(data) <- colnames_full
+```
+
+### Knn
+
+
+```{r}
+# Load dataset
+Xtrain = data[,-(length(data))]
+Xtrain = Xtrain[,-c(1,5,8,9,10,12,13,14)]
+labels = factor(data$Exited, levels = c("No", "Yes"), labels = c(0,1))
+#labels <- ifelse(data$Exited == "Yes",1,0)
+
+data_select = data[,-c(1,5,8,9,10,12,13,14)]
+data_select$Exited <- as.numeric(data_select$Exited)-1
+
+test_data_select <- Test_data[,-c(1,5,8,9,10,12,13,14)]
+test_data_select$Exited <- as.numeric(test_data_select$Exited)-1
+labels_test <- factor(test_data_select$Exited)
+
+
+# Class frequencies
+table(labels)
+
+# Data visualisation
+cols = c("grey","brown2")
+plot(Xtrain[,3:4], col= cols[labels], pch=20)
+legend("topright", legend = c(0,1), col = c("grey","brown2"), pch = 20)
+
+#spread(Xtrain)
+
+```
+
+```{r}
+
+### Finding the optimal 'k'
+
+# Split data set into train and test sets
+data2 <- data.frame(Age =Xtrain$Age, balance=Xtrain$Balance)
+len <- length(Xtrain$Geography)
+split <- 0.7*len
+#train <- Xtrain[1:split,]
+train <- data2[1:split,]
+labels_train <- labels[1:split]
+test <- data2[split:len,]
+#test <- Xtrain[split:len,]
+labels_test <- labels[split:len]
+
+# Loop and calculate classification accuracy on train and test
+# then plot
+
+# Set the random seed to ensure we all have the same test set data
+kvals = seq(1, 50)
+
+TrainAcc = rep(0,length(kvals)) 
+TestAcc = rep(0,length(kvals)) 
+
+for (K in kvals) {
+
+# Get predicted labels for training data
+knn.pred.train = knn(train, train, cl = labels_train, k=K)
+knn.pred.test = knn(train, test, cl = labels_train, k=K)
+
+# Compute balanced accuracy on the training set and test set
+TrainAcc[K] <- (sensitivity(data = knn.pred.train, reference = labels_train) + specificity(data = knn.pred.train, reference = labels_train))/2
+
+TestAcc[K] <- (sensitivity(data = knn.pred.test, reference = labels_test) + specificity(data = knn.pred.test, reference = labels_test))/2
+}
+
+### Plot
+
+ymax = max(max(TrainAcc), max(TestAcc))
+ymin = min(min(TrainAcc), min(TestAcc))
+plot(kvals, TrainAcc, type="b", cex=0.5, col="blue", xlab = "k",
+ylab="Balanced Accuracy", ylim=c(ymin,ymax), main = "Knn Classification")
+lines(kvals, TestAcc, type="b", cex=0.5, col="red") # identify k-value giving lowest error on the test set which.min(TestError)
+# add this to the plot
+abline(v=which.max(TestAcc), lty=2)
+# Add legend so reader can distinguish what each line represents
+legend("topright", c("Train","Test"),cex=1.,col=c("blue","red"), pch=c(1,1), lty=c(1,1))
+
+```
+
+```{r}
+### kNN for Categorical
+
+# Calculate dissimilarity matrix using Gower distance
+gower_result <- daisy(data_select[,-ncol(data_select)], metric="gower")
+gower_result_mat <- as.matrix(gower_result)
+
+gowerMDS <- cmdscale(gower_result, k=2)
+
+colnames(gowerMDS) <- c("D1","D2")
+
+dataMDS <- cbind(as.data.frame(gowerMDS),data_select)
+
+ggplot(dataMDS, aes(D1, D2, color = factor(Exited))) +
+  geom_point() +
+  scale_color_manual(values = c("darkgrey", "darkcyan")) +  # Customize colors if needed
+  labs(color = "Exited", 
+       x = "Prod-2,3&4, Complaint-No, Active, Germany, Male", 
+       y = "Prod-2,3&4, Inactive, NotGerman, Female, CreditCard")
+
+
+###---------
+# Fit a stepwise regression model
+# Get the names of columns from the dataframe
+column_names <- colnames(data_select)
+
+### Fit the stepwise model for D2 using the constructed formula
+formula_string <- paste("D2 ~", paste(column_names, collapse = " + "))
+
+stepwise_model <- stepwise(
+  formula = as.formula(formula_string),  # Convert the string to formula
+  data = dataMDS,                         # Dataset
+  criterion = "BIC",                      # Criterion for selecting variables (e.g., BIC, AIC, etc.)
+  direction = "both"                      # Direction of stepwise search (e.g., "forward", "backward", "both")
+)
+
+summary(stepwise_model)
+
+### ----------------
+
+gower_test <- daisy(test_data_select[,-ncol(test_data_select)], metric="gower")
+gower_test_mat <- as.matrix(gower_test)
+gowerMDStest <- cmdscale(gower_test, k=2)
+colnames(gowerMDStest) <- c("D1","D2")
+dataMDStest <- cbind(as.data.frame(gowerMDStest),test_data_select)
+
+
+knn.pred.train = knn(gower_result_mat, gower_result_mat, cl = labels, k=5)
+(sensitivity(knn.pred.train,labels)+specificity(knn.pred.train,labels))/2
+
+knn.pred.train2 = knn(gowerMDS, gowerMDStest, cl = labels, k=5)
+
+(sensitivity(knn.pred.train2,labels_test)+specificity(knn.pred.train2,labels_test))/2
+
+(sensitivity(knn.pred.train,labels)+specificity(knn.pred.train,labels))/2
+
+
+knn.pred.test = knn(gower_result_mat[1:4000,1:4000], gower_test_mat, cl = labels, k=5)
+
+
+#knn.pred.train = knn(gower_result_mat, gower_test_mat, cl = labels, k=5)
+
+
+```
+
+```{r}
+# Set the random seed to ensure we all have the same test set data
+kvals = seq(200, 500, 10)
+
+TrainAccCat = rep(0,length(kvals)) 
+TestAccCat = rep(0,length(kvals)) 
+i = 1
+
+
+for (K in kvals) {
+
+# Get predicted labels for training data
+knn.pred.train = knn(gowerMDS, gowerMDS, cl = labels, k=K)
+knn.pred.test = knn(gowerMDS, gowerMDStest, cl = labels, k=K)
+
+# Compute balanced accuracy on the training set and test set
+TrainAccCat[i] <- (sensitivity(data = knn.pred.train, reference = labels) + specificity(data = knn.pred.train, reference = labels))/2
+
+TestAccCat[i] <- (sensitivity(data = knn.pred.test, reference = labels_test) + specificity(data = knn.pred.test, reference = labels_test))/2
+
+i <- i+1
+
+if (i==30){break}
+
+}
+
+
+### Plot
+
+ymax = max(max(TrainAccCat), max(TestAccCat))
+ymin = min(min(TrainAccCat), min(TestAccCat))
+plot(kvals, TrainAccCat, type="b", cex=0.5, col="blue", xlab = "k",
+ylab="Balanced Accuracy", ylim=c(ymin,ymax), main = "Knn Classification")
+lines(kvals, TestAccCat, type="b", cex=0.5, col="red") # identify k-value giving lowest error on the test set which.min(TestError)
+# add this to the plot
+abline(v=which.max(TestAccCat), lty=2)
+# Add legend so reader can distinguish what each line represents
+legend("topright", c("Train","Test"),cex=1.,col=c("blue","red"), pch=c(1,1), lty=c(1,1))
+
+
+```
+
+```{r}
+### Gower Attempt 2
+
+Merged <- rbind(data_select, test_data_select)
+
+gower_result2 <- daisy(Merged[,-ncol(data_select)], metric="gower")
+gower_result_mat2 <- as.matrix(gower_result2)
+
+gowerMDS_2 <- cmdscale(gower_result2, k=2)
+
+colnames(gowerMDS_2) <- c("D1","D2")
+
+dataMDS_Merged <- cbind(as.data.frame(gowerMDS_2),Merged)
+
+ggplot(dataMDS_Merged, aes(D1, D2, color = factor(Exited))) +
+  geom_point() +
+  scale_color_manual(values = c("darkgrey", "darkcyan")) +  # Customize colors if needed
+  labs(color = "Exited", 
+       x = "D1", 
+       y = "D2",
+       title = "Dissimilarty Plot from Merged Data")
+
+
+# -------- Knn
+
+train2 <- gowerMDS_2[1:nrow(data_select),]
+test2 <- gowerMDS_2[(nrow(data_select)+1):nrow(Merged),]
+
+# Get predicted labels for training data
+knn.pred.merged = knn(train2, test2, cl = labels, k=10)
+
+(sensitivity(data = knn.pred.merged, reference = labels_test) + specificity(data = knn.pred.merged, reference = labels_test))/2
+
+# Set the random seed to ensure we all have the same test set data
+kvals = seq(1, 20, 1)
+
+TrainAccCat = rep(0,length(kvals)) 
+TestAccCat = rep(0,length(kvals)) 
+i = 1
+
+
+for (K in kvals) {
+
+# Get predicted labels for training data
+knn.pred.train = knn(train2, test2, cl = labels, k=K)
+
+# Compute balanced accuracy on the training set and test set
+TestAccCat[i] <- (sensitivity(data = knn.pred.train, reference = labels_test) + specificity(data = knn.pred.train, reference = labels_test))/2
+
+#TestAccCat[i] <- (sensitivity(data = knn.pred.test, reference = labels_test) + specificity(data = knn.pred.test, reference = labels_test))/2
+
+i <- i+1
+}
+results <- cbind(kvals,TestAccCat)
+plot(results, main = "K neighbours and Balanced Accuracy", ylab = "Accuracy", xlab = "k values", type = "b")
+
+# Peaks at k=5
+# best model at k=5
+knn.pred.train = knn(train2, test2, cl = labels, k=5)
+confusionMatrix(knn.pred.train,labels_test)
+
+```
+
+
+
+
+
+### 2. Logistic Regression
+
+```{r}
+colnames(data_select)
+
+for (i in c(1,2,5,6)){
+  names <- colnames(data_select)
+  data_select[i] <- factor(as.numeric(data_select[[names[i]]]))
+  test_data_select[i] <- factor(as.numeric(test_data_select[[names[i]]]))
+}
+
+str(data_select)
+str(test_data_select)
+
+'
+data_select$NumOfProducts <- as.numeric(factor(data_select$NumOfProducts))
+data_select$Geography <- as.numeric(factor(data_select$Geography))
+data_select$Gender<- as.numeric(factor(data_select$Gender))
+data_select$Complain <- as.numeric(factor(data_select$Complain))
+data_select$Exited <- as.numeric(factor(data_select$Exited))
+
+data_select$NumOfProducts <- (factor(data_select$NumOfProducts))
+data_select$Geography <- (factor(data_select$Geography))
+data_select$Gender<- (factor(data_select$Gender))
+data_select$Complain <- (factor(data_select$Complain))
+data_select$Exited <- (factor(data_select$Exited))
+'
+
+# Complete model
+
+model <- lm(Exited ~ ., data = data_select)
+summary(model)
+
+# Best Subset with CV
+
+model <- glm(Exited ~ ., data = data_select, family = binomial)
+summary(model)
+
+probs <- predict(model, newdata = data_select[,-ncol(data_select)], type="response")
+probs_test <- predict(model, newdata = test_data_select[,-ncol(test_data_select)], type="response")
+
+thresh <- seq(0.0,1.0,0.1)
+Sens <- rep(0,length(thresh)) 
+Spec <- rep(0,length(thresh)) 
+Acc <- rep(0,length(thresh))
+SAcc <- rep(0,length(thresh))
+Acc.Test <- rep(0,length(thresh))
+
+for (i in 1:length(thresh)){
+class.pred <- 1*(probs > thresh[i])
+class.pred2 <- 1*(probs_test > thresh[i])
+
+conf <- confusionMatrix(factor(class.pred) ,factor(labels))
+conf_test <- confusionMatrix(factor(class.pred2) ,factor(labels_test))
+
+SAcc[i] <- conf$overall["Accuracy"]
+Sens[i] <- conf$byClass["Sensitivity"]
+Spec[i] <- conf$byClass["Specificity"]
+Acc[i] <- conf$byClass["Balanced Accuracy"]
+
+Acc.Test[i] <- conf_test$byClass["Balanced Accuracy"]
+
+}
+
+results <- cbind(thresh,Acc,Sens,Spec,SAcc, Acc.Test)
+results_All <- cbind(results_All,results)
+
+
+# Thresh of 0.5 is good enough
+plot(probs, ylab = "Probability", main = "Regression Prediction of Test Data")
+
+require(pROC)
+# Estimate ROC curve and plot it
+roc1 <- roc(labels, probs, plot=TRUE, grid=TRUE, col="red")
+
+
+plot(data_select$Age, data_select$NumOfProducts, col = as.factor(data_select$Exited)) # Get estimated coefficients
+plot(data_select$Age, data_select$NumOfProducts, col = as.factor(data_select$Exited)) # Get estimated coefficients
+
+plot(data_select$Age, model2$fitted.values, col = as.factor(data_select$Exited)) # Get estimated coefficients
+hb <- coef(model2)
+# Define straight line using intercept and slope 
+abline(a=hb[1], b= hb[5], col="blue")
+
+```
+
+# One variable regression
+
+```{r}
+model <- glm(Exited ~ Complain, data = data_select, family = binomial)
+summary(model)
+
+probs <- predict(model, newdata = data_select[,-ncol(data_select)], type="response")
+probs_test <- predict(model, newdata = test_data_select[,-ncol(test_data_select)], type="response")
+
+thresh <- seq(0.0,1.0,0.1)
+Sens <- rep(0,length(thresh)) 
+Spec <- rep(0,length(thresh)) 
+Acc <- rep(0,length(thresh))
+SAcc <- rep(0,length(thresh))
+Acc.Test <- rep(0,length(thresh))
+
+for (i in 1:length(thresh)){
+class.pred <- 1*(probs > thresh[i])
+class.pred2 <- 1*(probs_test > thresh[i])
+
+conf <- confusionMatrix(factor(class.pred) ,factor(labels))
+conf_test <- confusionMatrix(factor(class.pred2) ,factor(labels_test))
+
+SAcc[i] <- conf$overall["Accuracy"]
+Sens[i] <- conf$byClass["Sensitivity"]
+Spec[i] <- conf$byClass["Specificity"]
+Acc[i] <- conf$byClass["Balanced Accuracy"]
+
+Acc.Test[i] <- conf_test$byClass["Balanced Accuracy"]
+
+}
+
+resultsOneVar <- cbind(thresh,Acc,Sens,Spec,SAcc, Acc.Test)
+
+# PLOT results ACC
+plot(probs, ylab = "Probability", main = "Regression Prediction of Test Data")
+
+# ROC
+roc1 <- roc(labels, probs, plot=TRUE, grid=TRUE, col="red")
+print(paste(roc1$thresholds,roc1$sensitivities, roc1$specificities))
+
+
+plot(data_select$Age,data_select$Exited, col=factor(data_select$Exited), 
+     xlab = "Age", ylab = "Exited")
+abline(model3$coefficients[1], model3$coefficients[2])
+
+plot(data_select$Age, col=factor(data_select$Exited))
+
+
+
+```
+
+
+
+```{r}
+require(bestglm)
+data2 <- data_select
+y <- data2$Exited
+data2$Exited <- NULL
+data2["y"] <- y
+
+m1 <- bestglm(data2, family = binomial, IC="AIC")
+m1$Subsets
+summary(m1$BestModel)
+
+model <- m1$BestModel
+
+probs <- predict(model, newdata = data_select[,-ncol(data_select)], type="response")
+probs_test <- predict(model, newdata = test_data_select[,-ncol(test_data_select)], type="response")
+
+thresh <- seq(0.0,1.0,0.1)
+Sens <- rep(0,length(thresh)) 
+Spec <- rep(0,length(thresh)) 
+Acc <- rep(0,length(thresh))
+SAcc <- rep(0,length(thresh))
+Acc.Test <- rep(0,length(thresh))
+
+for (i in 1:length(thresh)){
+class.pred <- 1*(probs > thresh[i])
+class.pred2 <- 1*(probs_test > thresh[i])
+
+conf <- confusionMatrix(factor(class.pred) ,factor(labels))
+conf_test <- confusionMatrix(factor(class.pred2) ,factor(labels_test))
+
+SAcc[i] <- conf$overall["Accuracy"]
+Sens[i] <- conf$byClass["Sensitivity"]
+Spec[i] <- conf$byClass["Specificity"]
+Acc[i] <- conf$byClass["Balanced Accuracy"]
+
+Acc.Test[i] <- conf_test$byClass["Balanced Accuracy"]
+
+}
+
+resultsbestGLM <- cbind(thresh,Acc,Sens,Spec,SAcc, Acc.Test)
+
+```
+
+```{r}
+### LASSO
+install.packages("doMC")
+library(doMC)
+library(glmnet)
+
+# to render your results reproducible you can set the random # number seed: set.seed(); an even more transparent way is to # specify the fold each observation is assigned to
+# (using the "foldid" optional argument)
+set.seed(13)
+# I will use 10-fold cv:
+fid = sample(1:10, size = nrow(data_select), replace = TRUE)
+# load package to enable parallel processing
+require(doMC)
+# specify how many cores you want to be used in parallel 
+registerDoMC(cores=2)
+# CV for logistic regression with LASSO penalty:
+# - Predictors must be stored in matrix (which does not contain response) 
+cv.lasso = cv.glmnet(x = as.matrix(data_select[,-ncol(data_select)]), y=as.factor(data_select$Exited),
+          family = "binomial", alpha = 1.0,
+          type.measure = "auc",
+          parallel = TRUE,
+          nfolds = 10, foldid = fid)
+
+plot(cv.lasso)
+
+# s= defines the penalty parameter/ model we wish to access
+coef(cv.lasso, s=cv.lasso$lambda[56])
+# when cv.glmnet() is used you also have the options: # (output not shown)
+coef(cv.lasso, s="lambda.min")
+# as expected 1se model is smaller
+coef(cv.lasso, s="lambda.1se")
+
+```
+
+### Decision Tree
+
+```{r}
+require(rpart.plot)
+require(rpart)
+# Create first DT
+# Ensure that you understand the first 3 inputs to this function # and for now ignore the last input "control="
+data_select$Complain <- factor(data$Complain, levels = c("No","Yes"), labels = c(0,1))
+
+tr1 <- rpart(Exited ~ . , data = data_select,
+method="class", control=rpart.control(cp=0))
+
+# Plot with default settings #rpart.plot(tr1)
+# fallen.leaves=FALSE produces typical DT visualisation
+rpart.plot(tr1, fallen.leaves = TRUE)
+
+
+pred <- predict(tr1, newdata = data_select[,-ncol(data_select)], type = "prob") # pred is now matrix
+class(pred)
+require(pROC)
+rc <- roc(y, pred[,2], plot = TRUE, grid=TRUE)
+
+
+
+
+probs <- predict(tr1, newdata = data_select[,-ncol(data_select)], type="prob")
+probs_test <- predict(tr1, newdata = test_data_select[,-ncol(test_data_select)], type="prob")
+
+thresh <- seq(0.0,1.0,0.1)
+Sens <- rep(0,length(thresh)) 
+Spec <- rep(0,length(thresh)) 
+Acc <- rep(0,length(thresh))
+SAcc <- rep(0,length(thresh))
+Acc.Test <- rep(0,length(thresh))
+
+for (i in 1:length(thresh)){
+class.pred <- 1*(probs[,2] > thresh[i])
+class.pred2 <- 1*(probs_test[,2] > thresh[i])
+
+conf <- confusionMatrix(factor(class.pred) ,factor(labels))
+conf_test <- confusionMatrix(factor(class.pred2) ,factor(labels_test))
+
+SAcc[i] <- conf$overall["Accuracy"]
+Sens[i] <- conf$byClass["Sensitivity"]
+Spec[i] <- conf$byClass["Specificity"]
+Acc[i] <- conf$byClass["Balanced Accuracy"]
+
+Acc.Test[i] <- conf_test$byClass["Balanced Accuracy"]
+
+}
+
+resultsTest <- cbind(thresh,Acc,Sens,Spec,SAcc, Acc.Test)
+ resultsTest <- round(resultsTest,3)
+```
+
+```{r}
+### Test set
+pred <- predict(tr1, newdata = test_data_select[,-ncol(test_data_select)], type = "prob") # pred is now matrix
+rc <- roc(test_data_select$Exited, pred[,1], plot = TRUE, grid=TRUE) 
+
+
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+### Extra
+
+```{r}
+
+train_conf_matrix <- confusionMatrix(data = knn.pred.train, reference = labels_train)
+test_conf_matrix <- confusionMatrix(data = knn.pred.test, reference = labels_test)
+
+head(class.pred)
+
+sensitivity(factor(class.pred) ,factor(labels_test))
+specificity(factor(class.pred) ,factor(labels_test))
+
+(sensitivity(factor(class.pred) ,factor(labels_test)) + specificity(factor(class.pred) ,factor(labels_test)))/2
+
+conf <- confusionMatrix(factor(class.pred) ,factor(labels_test))
+
+
+```
+
+
+
