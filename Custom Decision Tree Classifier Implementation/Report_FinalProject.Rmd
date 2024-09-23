@@ -1,0 +1,990 @@
+---
+title: "Report: Custom Decision Tree Classifier Implementation"
+author: '36523348'
+date: "2024-01-10"
+output:
+  pdf_document:
+    latex_engine: xelatex
+bibliography: references.bib
+classoption: a4paper
+---
+
+```{r setup, include=FALSE, message=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+if(!require(dplyr)) install.packages("dplyr")
+if(!require(tidyverse)) install.packages("tidyverse")
+if(!require(ggplot2)) install.packages("ggplot2")
+if(!require(psych)) install.packages("psych")
+if(!require(tinytex)) install.packages("tinytex")
+if(!require(kableExtra)) install.packages("kableExtra")
+if(!require(patchwork)) install.packages("patchwork")
+if(!require(caret)) install.packages("caret")
+if(!require(leaps)) install.packages("leaps")
+if(!require(ez)) install.packages("ez")
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(psych)
+library(tinytex)
+library(kableExtra)
+library(knitr)
+library(patchwork)
+library(caret)
+library(leaps)
+library(ez)
+
+```
+
+
+# Abstract
+
+This research delves into the comprehensive evaluation of a custom decision tree classifier, contrasting its outcomes with the widely-used SKlearn library implementation. Through extensive testing across diverse datasets with varied parameters, it aims to (i) assess the performance of a custom implementation of a decision tree classifier, with the SKlearn implementation, (ii) evaluate result metrics encompassing accuracy, precision, recall, F1-score, Mathew's correlation, and prediction similarity, and computational metrics including training time and memory utilization.
+
+Comparative analysis reveals marginal differences, approximately within a 1% range, between the outcomes of the custom and SKlearn classifiers. Notably, prediction similarity stands at around 98%, indicating closely aligned performances. A detailed exploration of the impact of input parameters reveals that sample size, depth and minimum samples criteria have some impact on evaluation metrics, but a greater impact on training time and memory utilization. The robustness of findings is supported by statistical analyses throughout the study, informing the significance of observed changes. Lastly, this study brings focus to optimal configurations for custom classifiers, highlighting the delicate balance between capturing dataset nuances and preventing over fitting.
+
+# 1. Introduction
+
+Machine learning, especially the development and assessment of decision tree classifiers, has undergone substantial progress. The focus on optimizing the accuracy and efficiency of classification algorithms has become paramount within this evolving field. Review of the existing literature reveals a predominant reliance on established machine learning libraries, particularly emphasizing the widely-adopted SKlearn implementation [@noauthor_sklearntreedecisiontreeclassifier_nodate] as the benchmark for decision tree classifiers. However, not much literature exists focusing on the intricate aspects and performance associated with custom decision tree classifiers. This study explores the cross examination of custom implementations, questioning whether these alternatives can offer comparable accuracy and efficiency to widely-adopted libraries like SKlearn. 
+
+In this study, the first goal is to construct a custom decision tree classifier that is comparable in some aspects to the SKlearn implementation. Next is to perform a detailed evaluation of the custom decision tree classifier's performance in comparison to the widely-adopted SKlearn implementation. This evaluation seeks to provide a nuanced understanding of the strengths and weaknesses of this custom classifier across various datasets, and comparatively evaluate the performance against SKlearn. Lastly, we aim to identify paramaters contributing significantly to optimal configurations for classification, whilst addressing the nuances and limitations of the data.
+
+# 2. Methodology
+
+In this section, the implementation details of a custom Decision Tree Classifier are presented. Decision tree is a fundamental machine learning algorithm used for classification tasks. The code is written in Python, leveraging key libraries such as NumPy and Pandas.
+
+## Class Structure: Node and DecisionTree
+
+The Decision Tree Classifier is implemented through two classes: `Node` and `DecisionTreeClassifier`.
+
+**Node Class:**
+The `Node` class represents a node in the decision tree. It has attributes such as `feature_name`, `threshold`, `left`, `right`, `info_gain`, and `value`. These attributes define the structure of the decision tree node.
+The constructor initializes the node with the specified attributes, allowing for the definition of branching conditions and values for leaf nodes.
+
+**DecisionTreeClassifier Class:**
+The `DecisionTreeClassifier` class serves as the main implementation of the decision tree algorithm.
+Key parameters such as the splitting method (`method`), minimum samples required for a split (`min_samples_split`), and maximum tree levels (`tree_levels`) can be set during initialization.
+The `fit` method is responsible for training the decision tree on a given dataset. It extracts column names, converts object-type columns to numeric or string types, and checks and stores categorical information for features.
+The `train` method recursively creates the decision tree by splitting nodes based on information gain until specified stopping conditions are met, namely the minimum splitting criteria (`min_samples_split`) and the levels of branching (`tree_levels`) provided as input.
+The `best_split` method finds the best split for the current dataset, and the `split` method efficiently divides the dataset based on a feature threshold, considering categorical or numeric data.
+Methods for calculating information gain (`information_gain`), entropy (`entropy`), and Gini index (`gini_index`) are provided to evaluate split quality.
+The `predict` method predicts the output for a new dataset, and the `make_prediction` method facilitates the prediction process for individual data points.
+Methods for printing the tree in console (`print_tree`), saving the tree to a varible and as a file (`save_tree_to_variable`) and (`print_tree_to_file`). Some other supporting methods for variable manipulation such as `convert_data_types` and `check_string_columns` methods.
+
+## Usage and Customization
+
+The Decision Tree Classifier allows customization through parameters, enabling users to tailor the model according to their specific requirements. Users can specify the splitting method, minimum samples for a split, and the maximum levels of branching. It can handle datasets of all types, containing numeric and character variables and multiclass features.
+
+## Information Gain Calculation
+
+Information gain is a key concept used in decision tree algorithms to quantify the effectiveness of a particular feature in splitting a dataset. It is implemented in the context of entropy [@shannon_mathematical_nodate] or Gini impurity [@quinlan_induction_1986]. The calculation of information gain with reference to the entropy-based and Gini-Index approach are detailed ahead, they were extended for multi-class problems.
+
+**Entropy:** Entropy is a measure of impurity or disorder in a dataset. For a binary classification problem, the entropy of a dataset \(S\) is defined as:
+
+\[ Entropy(S) = - p_+ \cdot \log_2(p_+) - p_- \cdot \log_2(p_-) \]
+
+where:
+- \( p_+ \) is the proportion of positive instances in \(S\).
+- \( p_- \) is the proportion of negative instances in \(S\).
+- \( \log_2 \) is the logarithm to the base 2.
+
+**Information Gain with Entropy:** Information gain quantifies the reduction in entropy achieved by splitting a dataset based on a particular feature. It is calculated as the difference between the entropy of the parent dataset \(S\) and the weighted sum of entropies of the child datasets resulting from the split. The formula for information gain is as follows:
+
+\[ \text{Information Gain} = \text{Entropy}(S) - \left( \frac{|S_{\text{left}}|}{|S|} \cdot \text{Entropy}(S_{\text{left}}) + \frac{|S_{\text{right}}|}{|S|} \cdot \text{Entropy}(S_{\text{right}}) \right) \]
+
+where:
+- \( S_{\text{left}} \) and \( S_{\text{right}} \) are the datasets resulting from the split.
+- \( |S| \) is the total number of instances in the parent dataset.
+- \( |S_{\text{left}}| \) and \( |S_{\text{right}}| \) are the number of instances in the left and right child datasets, respectively, when divided with the total instances  \( |S| \), they form the weight of the respective subset. 
+
+Higher information gain indicates a more effective split, as it signifies a greater reduction in entropy and, consequently, increased purity or homogeneity in the resulting subsets. Decision tree algorithm implemented finds the feature and threshold that maximizes information gain during the tree-building process. This leads to the creation of subsets with more homogeneous class distributions, ultimately improving the accuracy of the model.
+
+## Gini Impurity
+
+Gini impurity is an alternative measure of calculating impurity commonly used in decision tree algorithms. For custom classification tree, the Gini impurity of a dataset \(S\) is calculated as:
+
+\[ Gini(S) = 1 - \sum_{i=1}^{c} p_i^2 \]
+
+where:
+- \( c \) is the number of classes in the dataset.
+- \( p_i \) is the proportion of instances belonging to class \(i\).
+
+## Information Gain with Gini Impurity
+
+In the decision tree algorithm, information gain is also calculated using Gini impurity as the impurity measure. The formula for information gain with Gini impurity is given by:
+
+\[ \text{Information Gain (Gini)} = \text{Gini}(S) - \left( \frac{|S_{\text{left}}|}{|S|} \cdot \text{Gini}(S_{\text{left}}) + \frac{|S_{\text{right}}|}{|S|} \cdot \text{Gini}(S_{\text{right}}) \right) \]
+
+where:
+- \( S_{\text{left}} \) and \( S_{\text{right}} \) are the datasets resulting from the split.
+- \( |S| \) is the total number of instances in the parent dataset.
+- \( |S_{\text{left}}| \) and \( |S_{\text{right}}| \) are the number of instances in the left and right child datasets, respectively,  when divided with the total instances  \( |S| \), they form the weight of the respective subset. 
+
+It quantifies the reduction in Gini impurity achieved by splitting the dataset based on a specific feature. Higher information gain with Gini impurity indicates a more effective split, leading to subsets with increased homogeneity.
+
+## Evaluation against SKlearn Decision Tree CLassifier
+
+The performance of our custom decision tree implementation was assessed by comparing it to the pre-built decision tree classifier provided by the SKlearn library [@noauthor_sklearntreedecisiontreeclassifier_nodate]. Two sets of results were obtained to facilitate this comparison:
+
+**Evaluation Metrics:** Accuracy, F1-score, Precision, Recall, Matthews Correlation Coefficient, and Prediction Similarity. Prediction Similarity: This metric gauges the agreement between the predicted classes of our custom classifier and those generated by SKlearn.
+
+**Computational Metrics:** Training Time Difference: Quantifies the variance in training times between our custom classifier and the SKlearn implementation.
+Memory Utilization: Examines the disparity in memory usage during the training phase between the two classifiers.
+These comprehensive sets of metrics provide a robust basis for comparing the effectiveness and efficiency of our custom decision tree implementation against the widely-used SKlearn library.
+
+**Basic Tree Structure:** For comparison, Hypothyroid dataset was used to train a decision tree through both libraries, and plotted or printed for comparative visualization. Custom decision tree operated in a relatively similar manner forming similar root and leaf nodes  (small error range, analyzed in detail in Results section). The decision tree at minimum samples = 3 and tree depth = 3, is shown in the figure below.
+
+```{r fig9, echo=FALSE, out.width="70%", fig.cap="Hypothyroid data Decision Tree by Custom Classifier. (Left) Tree Structure (Right) Tree saved as output in text file", fig.align='center'}
+
+knitr::include_graphics("treecustom.png")
+```
+
+
+**Limitations:** While the custom decision tree implementation shares common parameters with SKlearn, such as the Information Gain method (Entropy or Gini Index), minimum samples for splitting, and maximum levels of branches, it has some limitations in flexibility, compared to the SKlearn library. Custom Implementation operates on a 'best fit' protocol, where it tests all possible splits to find the optimal one. Whereas,
+SKlearn Library offers greater flexibility with advanced parameters, including but not limited to pruning, random permutations for splitting, and complexity cost parameters. These advanced features are not integrated into our custom implementation. Custom Implementation lacks certain advanced parameters available in the SKlearn Decision Tree classifier such as the fine-tuning of the decision tree model using pruning and complexity parameters, allowing for a more detailed and customized configuration.
+To ensure a fair comparative evaluation, the SKlearn classifier was utilized with a 'best split' setting and without additional parameters.
+
+
+```{r Result_Analysis1.1, echo=FALSE}
+
+## Custom Decision Tree Metrics
+# Loading results
+datafull = read.csv("results_v8.csv")
+
+library(dplyr)
+library(kableExtra)
+
+# Function to summarize data
+summarize_data <- function(datafull, dataset, rows, min_samples, depth) {
+  datafull %>%
+    filter(Name == dataset) %>%
+    filter(rows == rows) %>%
+    filter(min_samples == min_samples) %>%
+    filter(depth == depth) %>%
+    group_by(method) %>%
+    summarise(
+      Dataset = first(Name),
+      Variables = first(variables),
+      Samples = first(rows),
+      Features = first(features),
+      Accuracy = mean(custom_acc),
+      F1score = mean(f1_self),
+      MCC = mean(mcc_self),
+      TimeDifference = mean(time_diff)
+    )
+}
+
+# List of datasets
+datasets <- c("Wine", "CustomerChurn", "HCV", "Hypothyroid")
+
+# Initialize an empty dataframe to store the results
+result_data <- data.frame()
+
+# Loop through each dataset
+for (dataset in datasets) {
+  data2 <- summarize_data(datafull, dataset, switch(dataset,
+                                                   "Wine" = 6497,
+                                                   "CustomerChurn" = 3150,
+                                                   "HCV" = 1385,
+                                                   "Hypothyroid" = 3163),3, 8)
+
+  result_data <- rbind(result_data, data2)
+}
+
+# Round the numeric columns
+result_data <- cbind(result_data[, 1:4], round(result_data[, 5:7], 3))
+
+
+
+```
+
+# 3. Results and Discussion
+
+In this section, we comprehensively assess the implementation and outcomes of the custom decision tree classifier, in comparison to the decision tree classifier from the SKlearn library. The classifiers underwent testing across multiple datasets with varied parameters to ensure a thorough examination.
+
+## 3.1. Evaluation summary 
+
+The table below provides a summary of evaluation metrics associated with each dataset, along with their respective attributes and hyperparameters. Four datasets were employed, each at different sizes: 25%, 50%, 75%, and 100% of samples. The tree branching depths were set at 2, 4, 8, and 16, and the minimum sample sizes for splitting were configured at 3, 15, 50, 100 and 500. The datasets used for evaluation are as follows:
+
+1. Wine Quality Dataset: Represents a business-oriented objective of identifying high-quality wines for purchase. This dataset includes only quantitative features (features: 12, samples: ~6500) [@paulo_cortez_wine_2009].
+
+2. Customer Churn Dataset: Represents a business cycle approach to customer retention, encompassing both qualitative and quantitative features (features: 14, samples: ~3100) [@unknown_iranian_2020].
+
+3. Hepatitis-C Dataset: Applied for a medical/biological context to predict disease outcomes based on test readings and other factors. It includes qualitative, categorical, and quantitative features (features: 29, samples: ~1400) [@sanaa_kamal_hepatitis_2017].
+
+4. Hypothyroid Dataset: Employed for a medical/biological context in predicting disease outcomes based on test readings and other factors. It comprises qualitative, categorical, and quantitative features (features: 18, samples: ~3100) [@quinlan_thyroid_1986].
+
+Maintaining a variety in datasets aims to mitigate field-based evaluation bias, facilitating assessment based on differing complexities and sizes. Evaluation metrics encompassed accuracy, precision, recall, F1-score, Mathew's correlation, and prediction similarity of predicted classes on test data. Computational metrics  assessed included the training time difference between the custom classifier and the SKlearn classifier, along with memory utilization. A summarized version of evaluation metrics for the results of the custom implementation of the decision tree are presented in Table-1.
+
+Results indicate that broadly, evaluation metrics are not dependent upon the variable types (quantitative or categorical), data set attributes of size or the information gain method utilized (gini index or entropy). Rather they represent the ability of the features contained withing to be appropriate enough to allow useful classification through decision trees. Each aspect has been investigated in more detail in later sections.
+
+```{r}
+# Print the final table to pdf
+kable(result_data, format = "latex", booktabs = TRUE, 
+      caption = "Summary of Custom Decision Tree Metrics (depth = 8, minimum samples for split = 3) ", label = "tab:table1")
+```
+
+```{r, echo=FALSE}
+
+# Adding columns computing differences
+diff_data <- datafull %>% mutate( Accuracy = custom_acc-SK_acc,
+                                   Precision =  precision_self- precision_SK,
+                                   Recall = recall_self - recall_Sk,
+                                   F1score = f1_self - f1_SK,
+                                   MCC = mcc_self - mcc_SK,
+                                   Memory = mem_tree - mem_SK,
+                                   .keep = "all")
+
+# Selecting relevant columns
+
+# 1. Summarize accross Depths
+result_data <- diff_data %>% select(depth, Accuracy, Precision, 
+                                   Recall, F1score, MCC, prediction_acc,
+                                   time_diff, Memory) %>% group_by(depth) %>%
+  summarise(Accuracy = mean(Accuracy),
+            Precision = mean(Precision),
+            Recall = mean(Recall),
+            F1score = mean(F1score),
+            MCC = mean(MCC),
+            Time_secs = mean(time_diff),
+            Memory_MiB = mean(Memory),
+            Similarity = mean(prediction_acc))
+
+result_data <- drop_na(result_data)
+
+# Calculate average across columns and edit dataframe
+avg_data <- data.frame(colMeans(result_data)) 
+avg_data <- t(round(avg_data[-1, , drop = FALSE],3))
+rownames(avg_data) <- "Average"
+```
+
+## 3.2. Detailed Comparison of Differences in Evaluation Results
+
+A comprehensive evaluation of the disparity in results between the custom decision tree classifier and SKlearn library's classifier is compiled below. This analysis aims to assess the performance across various evaluation and computational metrics, including accuracy, precision, recall, F1-score, prediction similarity, Matthew's correlation, training time, and memory utilization. The differences between the custom decision tree and SKlearn decision tree classifiers are presented with respect to different groups of inputs, shedding light on performance variations based on input attributes and classifier parameters.
+
+**1. Tree Depth:**: Tree depths were tested at four different levels, and the results are summarized in the table below. On average, a negligible difference in accuracy, precision, recall, F1-score and  Matthew's correlation coefficient (MCC) is observed. The training time and memory increase with depth, with an average difference of `r avg_data[6]`seconds more and `r avg_data[7]`MiB less memory utilized by custom classifier. The time increase accumulates with growing complexity, reaching up to approximately 5 seconds. Prediction similarity decreases slightly with increase in depth.
+
+The findings suggest that the depth has a minimal impact on the evaluation metrics of accuracy and similarity between the two classifiers. However, as a measure of complexity, increasing depth contributes to a continuous rise in training time and memory utilization. This aligns with expectations, as computational metrics are inherently influenced by classification complexity.
+
+The observed decrease in prediction similarity with increased depth is anticipated to be a consequence of overfitting in classifiers. This decrease in generalizability is directly reflected in the altered results, indicating the need for cautious consideration of depth parameters to prevent overfitting and ensure robust model performance.
+
+```{r, echo=FALSE}
+# Print the final table with title
+kable(result_data, digits = 3 ,format = "latex", booktabs = TRUE,
+               caption = "Difference in Evaluation Metrics Across Tree Depths: Table highlighting differences in results, Negative values indicate comparativelyy lesser units by custom classifier, positive values indicates greater units taken by custom classifier", label = "tab:table4") %>%
+  kable_styling(full_width = FALSE, latex_options = "hold_position")
+
+kable(avg_data, digits = 3 ,format = "latex", booktabs = TRUE, align = "c",
+       caption = "Average of Difference in metrics across Tree Depths: Table highlighting differences in results, Negative values indicate comparativelyy lesser units by custom classifier, positive values indicates greater units taken by custom classifier.",  label = "tab:table5") %>%
+   kable_styling(full_width = FALSE, latex_options = "hold_position")
+```
+
+
+**2. Minimum samples criteria:**: Minimum samples required for branching were tested at 6 different levels and the results are summarized in the table below. The relation of complexity and overfitting with evaluation results is similar to that seen in tree depths. The time increase accumulates with growing complexity (decreasing minimum samples input), reaching up to approximately 4 seconds. Prediction similarity decreases slightly with increase in minimum samples criteria.
+
+The findings suggest that sample size of branching has a minimal impact on the evaluation metrics of accuracy and similarity between the two classifiers. However, as a measure of complexity, decreasing criteria contributes to a continuous rise in training time and memory utilization. This aligns with expectations, as computational metrics are inherently influenced by classification complexity.
+
+The observed decrease in prediction similarity with increased criteria is anticipated to be a consequence of overfitting in classifiers. This decrease in generalizability is directly reflected in the altered results.
+
+```{r, echo=FALSE}
+
+# Adding columns computing differences
+# 1. Summarize accross Depths
+result_data = diff_data %>% select(min_samples, Accuracy, Precision, 
+                                   Recall, F1score, MCC, prediction_acc,
+                                   time_diff, Memory) %>% group_by(min_samples) %>%
+  summarise(Accuracy = mean(Accuracy),
+            Precision = mean(Precision),
+            Recall = mean(Recall),
+            F1score = mean(F1score),
+            MCC = mean(MCC),
+            Time_secs = mean(time_diff),
+            Memory_MiB = mean(Memory),
+            Similarity = mean(prediction_acc))
+
+result_data <- cbind(result_data[, 1], round(result_data[, 2:ncol( result_data)], 3))  
+result_data <- drop_na(result_data)
+
+# Calculate average across columns and edit dataframe
+avg_data <- data.frame(colMeans(result_data)) 
+avg_data <- t(round(avg_data[-1, , drop = FALSE],3))
+rownames(avg_data) <- "Average"
+
+# Print the final table
+kable(result_data, format = "latex", booktabs = TRUE, align = "c",
+      caption = "Difference in Evaluation Metrics Across Minimum Samples for Branching",
+      label = "tab:table6") %>% 
+  kable_styling(full_width = FALSE,  latex_options = "hold_position")
+
+# Print the final table
+kable(avg_data, format = "latex", booktabs = TRUE, align = "c",
+      caption = "Average of Difference in Evaluation Metrics Across Minimum Samples for Branching",
+      label = "tab:table7") %>% 
+  kable_styling(full_width = FALSE,  latex_options = "hold_position")
+
+```
+
+## 3.3. Detailed Exploration of Results
+
+A meticulous examination of the results from the custom classifier is undertaken to discern patterns and trends arising from dataset attributes and classification parameters. This detailed exploration aims to unravel nuanced insights into the performance of the classifier under varying conditions.
+
+**1. Performance across Sample Sizes**: The classifier was executed at four distinct sample sizes from each dataset (25%, 50%, 75%, and 100%). A subset of results for each size, across wine quality dataset is shown in the table below. Additionally, a graphical representation of the results is presented in Figure 2. Accuracy and F1-score are plotted from the evaluation metrics, considering F1-score is a harmonic mean of precision and recall, thus encapsulating both aspects. Time is plotted from the computational metrics. Together, the visual representation in the plots offers a scaled summary of the entire evaluation metrics panel, showcasing their variations with an increase in complexity introduced by sample size
+
+```{r, echo=FALSE}
+
+# Adding columns computing differences
+# 1. Summarize accross Dataset and Sample size
+
+datasets <- c("Wine", "CustomerChurn", "HCV", "Hypothyroid")
+
+# Initialize an empty dataframe to store the results
+result_data <- data.frame()
+
+for (dataset in datasets){
+  data = datafull %>%
+    filter(Name == dataset) %>%
+    group_by(Sample_size) %>%
+    summarise(Dataset = first(Name),
+              Features = first(features),
+              Accuracy = mean(custom_acc),
+              F1score = mean(f1_self),
+              MCC = mean(mcc_self),
+              Time = mean(time_diff),
+              Memory = mean(mem_tree),
+              Similarity = mean(prediction_acc))
+  
+  result_data <- rbind(result_data,data)
+  
+}
+
+result_data <- cbind(result_data[, 1:2], round(result_data[, 3:ncol(result_data)], 3))  
+
+# Function to scale for figures
+ScaleToPlot <- function(df, feature){
+  datasets <- c("Wine", "CustomerChurn", "HCV", "Hypothyroid")
+  result_data <- data.frame()
+
+for (dataset in datasets){
+  data <- df %>%
+    filter(Dataset == dataset)
+  data <- data.frame("x" = data[,1],
+                     "Dataset" = data[,2],
+                     "y" = scale(data[feature]))
+  
+  result_data <- rbind(result_data,data)
+}
+ return(result_data) 
+}
+
+```
+
+
+```{r fig1, echo=FALSE, fig.width=10, fig.height=4, fig.cap="Size vs. Accuracy, F1score and Time by Dataset (Standardized)", out.width="100%"}
+
+scaled_df <- ScaleToPlot(result_data, "Accuracy")
+# Plot scaled figure
+plot1 <- ggplot(scaled_df, aes(x = x, y = Accuracy, color = Dataset)) +
+  geom_line() +
+  facet_wrap(~Dataset) +
+  labs(title = "Size vs Accuracy",
+       x = "Sample_Size",
+       y = "Accuracy") +
+  theme_minimal() +
+  xlim(min(scaled_df$x), max(scaled_df$x)) + guides(color = "none")
+#  ylim(min(scaled_df$y), max(scaled_df$y))
+
+scaled_df <- ScaleToPlot(result_data, "F1score")
+# Plot scaled figure
+plot2 <- ggplot(scaled_df, aes(x = x, y = F1score, color = Dataset)) +
+  geom_line() +
+  facet_wrap(~Dataset) +
+  labs(title = "F1-score",
+       x = "Sample_Size",
+       y = "F1score") +
+  theme_minimal() +
+  xlim(min(scaled_df$x), max(scaled_df$x)) + guides(color = "none")
+#  ylim(min(scaled_df$y), max(scaled_df$y))
+
+scaled_df <- ScaleToPlot(result_data, "Time")
+# Plot scaled figure
+plot3 <- ggplot(scaled_df, aes(x = x, y = Time, color = Dataset)) +
+  geom_line() +
+  facet_wrap(~Dataset) +
+  labs(title = "Time (secs)",
+       x = "Sample_Size",
+       y = "Time_secs") +
+  theme_minimal() +
+  xlim(min(scaled_df$x), max(scaled_df$x)) + guides(color = "none")
+#  ylim(min(scaled_df$y), max(scaled_df$y))
+
+combined_plot <- plot1 + plot2 + plot3 + plot_layout( guides = 'collect')
+print(combined_plot)
+
+avg_hcv <- result_data %>% filter(Dataset == "HCV") %>% select(Accuracy) %>% summarise(mean_accuracy = mean(Accuracy)) %>% round(.,2) %>% as.numeric()
+```
+
+While the evaluation metrics exhibit a general increasing trend with the expansion of the training data obtained from samples, a plateau or peak is observed, before falling as well. Time and memory display an anticipated increase with the augmented complexity introduced by dataset size.
+
+The observed peaks in accuracy for the HCV and Hypothyroid datasets at 75% and 50% of sample sizes, respectively, may indicate an optimal training ratio. Beyond this point, overfitting could potentially occur, leading to a decline in the performance of the training model on the test set. Similarly, the plateau in the Customer Churn dataset at 50% to 75% exemplifies an optimal dataset size for achieving good performance, beyond which further increases in size may have reduced or diminishing impacts on accuracy.
+
+In practical applications, obtaining and managing large datasets can be challenging. Therefore, identifying a suitable amount of data along with an appropriate training-test ratio becomes crucial for achieving reasonable accuracy in real-world scenarios. These findings underscore the importance of carefully balancing dataset size and training ratios to optimize classifier performance.
+
+
+```{r , echo=FALSE}
+# Print the final table
+result_data2 <- result_data[1:4,]
+kable(result_data2, format = "latex", booktabs = TRUE, align = "c",
+      caption = "Detailed Evaluation of Metrics Across Sample Sizes", 
+      label = "tab:table8") %>% 
+  kable_styling(full_width = FALSE,  latex_options = "hold_position")
+
+```
+
+
+**2. Depth vs Minimum samples for splitting**: The classifier was executed at six minimum samples criteria (3, 15, 50, 100, 200, 500), across different input attributes (sample size, infromation gain methodology and depths criteria). In this section we will focus on the depth vs minimum samples criteria for optimal classification setting, and it impacts the evaluation metrics. To gain insights, a graphical representation of the results is presented in the figures below. Accuracy and F1-score are plotted from the evaluation metrics (F1-score encapsulating precision and recall). Here we take MCC into account as well, and Time is plotted from the computational metrics. Together, they provide a visual summary of the evaluation metrics panel. MCC (Matthew Correlation Coefficient), also known as Phi Coefficient is a measure of how closely related two variables are. For multiclass and imbalanced class problems, MCC is proposed to be a better evaluation measure than accuracy, precision, recall or F1 score.
+
+**Wine Data Set:** 
+An intriguing trend is noted in the wine dataset, where a decline in accuracy is observed with increasing depths. We can observe the start contrast between an over-simplified model vs an overfit one. At the lowest depth of 2, minimum samples will produce no effect due to over simplification. And although it might retain an accuracy measure without change, the F1-score and MCC are low. Upon closer examination, this trend can be rationalized through an exploration of the dataset attributes. The decrease in accuracy, coupled with a simultaneous rise in the F1-score, is attributed to a shift in the balance between true positives (TP), false positives (FP), and false negatives (FN) in the classification results. This is because the weighted F1-score, considering both precision and recall, proves to be less sensitive to class imbalances compared to accuracy. Given the strong class imbalance in the wine quality dataset, as depicted in the accompanying figure, changes in classification performance are more prominently reflected in metrics like accuracy. A decrease in accuracy suggests that the model encounters challenges with the majority class, while the F1-score, with its weighted calculation that accounts for class imbalances, indicates that the model optimizes in terms of capturing the minority class, hence yielding a higher F1 score.
+
+
+!["Class Label Imbalance in Datasets"]("Wine_labelsDist.png"){ width=40% } ![]("Hypothyroid_labeldist.png"){ width=40% }
+
+
+**HCV Dataset:** In the HCV dataset, although class labels are balanced, a similar discrepancy between accuracy and F1-score is observed. The overall low accuracy for this dataset (average = 0.24) implies that increasing the depth leads to an improved balance between TP, FP, and FN in the classification results, albeit at the cost of a slight decrease in accuracy. This phenomenon can be observed in the figures, where low complexity in parameters increases the accuracy but decreases F1-score, affecting the TP, FP and FN balance. It is essential to note that the standardization applied visually exaggerates the actual decline in accuracy (from 0.24 to 0.23), included to better observe small changes in data.
+
+**Customer Churn and Hypothyroid Dataset:** For these datasets, an optimal complexity setting is identified, beyond which accuracy and F1-score either decline sharply or plateau. The trade off between complexity and results of clasification is clearly visibl. The appropriate classification conditions for these dataset will include a trade off in evaluation measures for generalization, towards better performance on external datasets. The robustness of our conclusion regarding the Hypothyroid dataset is further substantiated by observing the change in the time required for decision tree training. The time metric also plateaus at the parameter following 4, reinforcing our earlier conclusion that the model is likely overfit at this point. This plateau suggests that the model has fully branched and does not necessitate additional time to increase complexity. The synchronized behavior of both accuracy-related metrics and computational metrics highlights the importance of the chosen depth parameter in achieving a well-balanced and efficient model for the given dataset.
+
+**Time:** The robustness of our conclusion regarding these datasets is corraborated by observing the change in the time required for decision tree training. The time metric also plateaus after the optimal complexity parameters, in the case of Hypothyroid dataset, reinforcing our earlier conclusion that the model is likely overfit at this point. In other datasets, the complexity directly affects the time utilized, creating a linear increase. The synchronized behavior of both accuracy-related metrics and computational metrics highlights the importance of the chosen depth parameter in achieving a well-balanced and efficient model for the given dataset.
+
+
+```{r, echo=FALSE}
+
+# Adding columns computing differences
+# 1. Summarize accross Dataset and Sample size
+
+datasets <- c("Wine", "CustomerChurn", "HCV", "Hypothyroid")
+depths <- unique(datafull$depth)
+
+# Initialize an empty dataframe to store the results
+result_data <- data.frame()
+
+for (dataset in datasets){
+  for (dep in depths){
+    data = datafull %>%
+      filter(Name == dataset) %>%
+      filter(depth == dep) %>%
+      group_by(min_samples) %>%
+      summarise(Dataset = first(Name),
+                Features = first(features),
+                Depth = first(depth),
+                Accuracy = mean(custom_acc),
+                F1score = mean(f1_self),
+                MCC = mean(mcc_self),
+                Time = mean(time_diff),
+                Memory = mean(mem_tree),
+                Similarity = mean(prediction_acc))
+    
+    result_data <- rbind(result_data,data)
+  }
+}
+# Table excluded as too long 
+# Print the final table
+# kable(result_data, format = "latex", booktabs = TRUE, align = "c",
+#       caption = "Detailed Evaluation of Metrics Across Tree Depths",
+#       label = "tab:table9") %>% 
+#   kable_styling(full_width = FALSE,  latex_options = "hold_position")
+
+```
+
+
+```{r fig4, echo=FALSE, fig.width=12, fig.height=7, fig.cap="Minimum Samples vs. Accuracy, F1score and Time (Standardized)", out.width="100%"}
+
+scaled_df <- ScaleToPlot(result_data, "Accuracy")
+scaled_df['depth'] <- factor(result_data$Depth)
+
+# Plot scaled figure
+plot1 <- ggplot(scaled_df, aes(x = min_samples, y = Accuracy, color = depth)) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~Dataset) +
+  labs(title = "Accuracy",
+       x = "Minimum samples",
+       y = "Accuracy") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),  # Title text size
+    axis.title.x = element_text(size = 12), # X-axis title text size
+    axis.title.y = element_text(size = 12), # Y-axis title text size
+    axis.text.x = element_text(size = 12),  # X-axis tick label text size
+    axis.text.y = element_text(size = 12)   # Y-axis tick label text size
+  )
+
+scaled_df <- ScaleToPlot(result_data, "F1score")
+scaled_df['depth'] <- factor(result_data$Depth)
+
+# Plot scaled figure
+plot2 <- ggplot(scaled_df, aes(x = min_samples, y = F1score, color = depth)) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~Dataset) +
+  labs(title = "F1-score",
+       x = "Minimum samples",
+       y = "F1score") +
+  theme_minimal() + theme(
+    plot.title = element_text(size = 16),  # Title text size
+    axis.title.x = element_text(size = 12), # X-axis title text size
+    axis.title.y = element_text(size = 12), # Y-axis title text size
+    axis.text.x = element_text(size = 12),  # X-axis tick label text size
+    axis.text.y = element_text(size = 12)   # Y-axis tick label text size
+  )
+
+
+combined_plot <- plot1 + plot2 + plot_layout( guides = 'collect')
+print(combined_plot)
+```
+
+
+```{r fig5, echo=FALSE, fig.width=12, fig.height=7, fig.cap="Minimum Samples vs. Accuracy, F1score and Time (Standardized)", out.width="100%"}
+
+scaled_df <- ScaleToPlot(result_data, "MCC")
+scaled_df['depth'] <- factor(result_data$Depth)
+# Plot scaled figure
+plot3 <- ggplot(scaled_df, aes(x = min_samples, y = MCC, color = depth)) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~Dataset) +
+  labs(title = "Matthew's Correlation",
+       x = "Minimum samples",
+       y = "MCC") +
+  theme_minimal() + theme(
+    plot.title = element_text(size = 16),  # Title text size
+    axis.title.x = element_text(size = 12), # X-axis title text size
+    axis.title.y = element_text(size = 12), # Y-axis title text size
+    axis.text.x = element_text(size = 12),  # X-axis tick label text size
+    axis.text.y = element_text(size = 12)   # Y-axis tick label text size
+  )
+
+
+scaled_df <- ScaleToPlot(result_data, "Time")
+scaled_df['depth'] <- factor(result_data$Depth)
+# Plot scaled figure
+plot4 <- ggplot(scaled_df, aes(x = min_samples, y = Time, color = depth)) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~Dataset) +
+  labs(title = "Time (secs)",
+       x = "Minimum samples",
+       y = "Time_secs") +
+  theme_minimal() + theme(
+    plot.title = element_text(size = 16),  # Title text size
+    axis.title.x = element_text(size = 12), # X-axis title text size
+    axis.title.y = element_text(size = 12), # Y-axis title text size
+    axis.text.x = element_text(size = 12),  # X-axis tick label text size
+    axis.text.y = element_text(size = 12)   # Y-axis tick label text size
+  )
+
+
+combined_plot <- plot3 + plot4 + plot_layout( guides = 'collect')
+print(combined_plot)
+
+```
+
+
+
+```{r, echo=FALSE}
+## T-Test
+Ttest <- function(data, groupwith, testcol, conf_val, hypo, paired_val) {
+  # Function to carry out T-tests on the data 
+  
+  # Inputs:
+  # data = dataset for analysis
+  # groupwith = grouping by the feature
+  # testcol = feature to be tested with T-test
+  # conf_val = the confidence interval for T-test
+  # hypo = alternative hypothesis based on two-sided or single-sided test
+  # paired_val = indicates if input is paired or not (logical)
+  
+  # returns a dataframe containing results
+  
+  #browser()
+  groups_name <- unique(data[[groupwith]])
+  result_df <- tibble(
+    feature = character(),
+    group1 = character(),
+    group2 = character(),
+    confidence = numeric(),
+    hypothesis = character(),
+    mean_group1 = numeric(),
+    mean_group2 = numeric()
+  )
+  
+  # Loop through the groups to perform T-test
+  for (i in seq_along(groups_name)[-length(groups_name)]) {
+    group1 <- as.character(groups_name[i])
+    group2 <- as.character(groups_name[i + 1])
+
+    data_group1 <- data[data[[groupwith]] == group1, testcol]
+    data_group2 <- data[data[[groupwith]] == group2, testcol]
+
+    result <- t.test(data_group1, data_group2, paired = paired_val,
+                     conf.level = conf_val, alternative = hypo)
+
+    hypothesis <- ifelse(
+      (result$conf.int[2] < result$estimate | result$estimate < result$conf.int[1]) &
+      (result$p.value < 1-conf_val),
+      "Alternative hypothesis is accepted",
+      "Null hypothesis not rejected"
+    )
+  
+    # Complile results
+    result_df <- bind_rows(
+      result_df,
+      tibble(
+        feature = testcol,
+        group1 = group1,
+        group2 = group2,
+        hypothesis = hypothesis,
+        confidence = conf_val,
+        mean_group1 = mean(data_group1),
+        mean_group2 = mean(data_group2)
+      )
+    )
+
+    #cat("Two-sample T-test results for", group1, "vs", group2, "\n")
+    #print(result)
+  }
+
+  return(result_df)
+}
+
+# Defining a function for conducting t-tests and appending results
+ttest_results <- data.frame()
+conduct_ttest <- function(data, groupby, metric) {
+  result_df <- Ttest(data, groupby, metric, 0.95, "two.sided", TRUE)
+  return(result_df)
+}
+
+### T - test analysis to measure impact of changing the row size of dataset on results
+x1 = c("Sample_size", "method", "depth")
+x2 = c("custom_acc","f1_self","time_diff")
+for (dataset in datasets){
+  data <- datafull %>% filter(Name == dataset)
+  for (i in x1){
+    for (ii in x2){
+      result_df <- conduct_ttest(data, i, ii)
+      ttest_results <- rbind(ttest_results, result_df)
+    }
+  }
+}
+significant_tests <- sum(ttest_results$hypothesis == "Alternative hypothesis is accepted")
+#significant_tests
+
+```
+
+## 3. Paired T-test for Assessing Significant Change
+
+In the preceding sections, we observed the change of evaluation metrics in response to alterations in classification input attributes. Although adjustments in attributes such as depth, sample size, and minimum branching did induce some discernible changes, our focus now shifts to ascertaining the statistical significance of these variations within the sampled data.
+
+To conduct a comprehensive analysis, we examined multiple datasets, summarizing the outcomes for each input attribute, including sample sizes, information gain methods, tree depths, and minimum samples for branching. Our evaluation encompassed changes in Accuracy, F1-score, and Time utilization. Employing a paired t-test adjusted at a 95% confidence interval was deemed appropriate, given that the datasets remained constant while only the input attributes were systematically modified for repeated testing. This established a paired basis for the test.
+
+Surprisingly, none of the observed changes exhibited statistical significance in this paired data setting (number of significant tests = `r significant_tests`). A concise presentation of the results is provided in the table below.
+
+```{r}
+result_data <- ttest_results[1:9,]
+result_data['feature'] <- str_replace_all(result_data$feature,"custom_acc","accuracy")
+result_data['feature'] <- str_replace_all(result_data$feature,"f1_self","f1score")
+
+ # Print the final table
+ kable(result_data[1:9,], digits = 3, format = "latex", booktabs = TRUE, align = "c",
+       caption = "T-test results accross HCV Dataset for Accuracy per Sample size (Wine Quality Dataset) ",
+       label = "tab:table10") %>%
+   kable_styling(full_width = FALSE,  latex_options = "hold_position")
+```
+
+## 3.4. Repeated Measures ANOVA for Assessing Significant Change
+
+In the previous analysis, paired T-test setting did not reveal statistical significance in the observed changes (number of significant tests = r significant_tests). One plausible explanation is that summarizing across a single feature, such as depth, might inadvertently incorporate confounding variations from other features like minimum samples or sample size. A more exhaustive approach, involving separation across groups in all input parameters and testing against the permutations created, would be too extensive.
+
+An alternative strategy involves testing for significant changes in the paired-samples using Repeated Measures ANOVA. This approach simplifies the process by automating sample recognition and assessing changes across groups. For paired or repeated measures data, where each dataset is measured multiple times under different conditions, a Repeated Measures ANOVA is a suitable statistical method. Repeated Measures ANOVA is similar to a simple multivariate design, where the same participants are measured repeatedly, yet with variations in conditions for the same characteristic [@repeated_nodate; @anova_nodate]. This method offers a more comprehensive evaluation of the dataset, capturing complex interactions between different parameters and their collective impact on the observed changes.
+
+```{r , echo=FALSE, message=FALSE, include=FALSE}
+
+## Repeated Measures ANOVA - Minimum samples
+
+# 'wid' is the sample identifier, 'dv' is the dependent variable, and ''within' is the repeated measure factor or independant variable.
+
+# Get Dataset and remove effect of confounders
+data <- datafull #%>% filter(depth == 16)
+data['Name'] <- factor(data$Name)
+
+# Perform repeated measures ANOVA using ezANOVA
+# Name = Dataset
+# Test for changes in Time
+ez_results <- ezANOVA(data = data, dv = time_diff, wid = Name, within = .(min_samples, depth, Sample_size), detailed = TRUE)
+result_time <- ez_results$ANOVA %>% arrange(desc(ges)) %>% mutate(ges = ges*100) %>% select(Effect, ges, p, 'p<.05' )
+
+# Test for changes in Accuracy
+ez_results <- ezANOVA(data = data, dv = custom_acc, wid = Name, within = .(min_samples, depth, Sample_size), detailed = TRUE)
+result_acc <- ez_results$ANOVA %>% arrange(desc(ges)) %>% mutate(ges = ges*100) %>% select(Effect, ges, p, 'p<.05' )
+
+# Test for changes in F1- score
+ez_results <- ezANOVA(data = data, dv = f1_self, wid = Name, within = .(min_samples, depth, Sample_size), detailed = TRUE, )
+result_f1 <- ez_results$ANOVA %>% arrange(desc(ges)) %>% mutate(ges = ges*100) %>% select(Effect, ges, p, 'p<.05' )
+result_time 
+result_acc
+result_f1
+
+```
+
+**Changes in Accuracy **: Results detailed in the table below, indicate that the only significant parameter is Sample size (p-value `r round(result_acc$p[1],2)`) explaining `r round(result_acc$ges[1],1)`% variance in accuracy data. While not significant enough, it is interesting to note minimum samples criteria can potentially explain around `r round(result_acc$ges[2],1)`% of variance in the accuracy data. Although some parameters are not significant enough to be reliable, however, they give an estimate of variation that maybe explainable and will be explored later in 'Regression'). 
+
+```{r}
+# Print the final table
+ kable(result_acc[1:4,], digits = 2, format = "latex", booktabs = TRUE, align = "c",
+       caption = "Repeated Measures ANOVA across Input Parameters for Accuracy",
+       label = "tab:table11") %>%
+ kable_styling(full_width = FALSE,  latex_options = "hold_position")
+
+```
+
+**Changes in F1-score **: Results detailed in the table below, indicate that the only significant parameter is Sample size (p-value `r round(result_f1$p[1],2)`) explaining `r round(result_f1$ges[1],1)`% variance in F1-score data. While not significant enough, it is interesting to note minimum samples criteria  and depth can potentially explain around `r round(result_f1$ges[2],1)`% and `r round(result_acc$ges[3],1)`% of variance in F1 data respectively. Although some parameters are not significant enough to be reliable, however, they give an estimate of variation that maybe explainable and will can be explored later.
+
+```{r}
+# Print the final table
+ kable(result_f1[1:4,], digits = 2, format = "latex", booktabs = TRUE, align = "c",
+       caption = "Repeated Measures ANOVA across Input Parameters for F1-score ",
+       label = "tab:table12") %>%
+ kable_styling(full_width = FALSE,  latex_options = "hold_position")
+
+```
+
+**Changes in Time **: Results detailed in the table below, indicate that no attribute is a significant parameter for time changes. While not significant enough, it is useful to note that depth and sample size can potentially explain around `r round(result_time$ges[1],1)`% and `r round(result_acc$ges[2],1)`% of variance in time data respectively. Although some parameters are not significant enough to be reliable, however, they give an estimate of variation that maybe explainable and will can be explored later.
+
+```{r}
+# Print the final table
+ kable(result_time[1:4,], digits = 2, format = "latex", booktabs = TRUE, align = "c",
+       caption = "Repeated Measures ANOVA across Input Parameters for Time",
+       label = "tab:table13") %>%
+ kable_styling(full_width = FALSE,  latex_options = "hold_position")
+
+```
+
+
+## 3.5. Explaining Relationships Through Regression
+
+In the previous sections, we have focused on identifying input attributes having considerable impact on evaluation metrics. In this section, we try to identify the strength and direction of that impact. The main goal of regression analysis is to understand the relationship between the dependent variable (target) and one or more independent variables (features or predictors). The coefficients in the regression equation represent the strength and direction of the relationships between the variables. While we cannot look at all the relationships in details, lets focus on two representative datasets (i) Low accuracy data (Wine Quality)  and (ii) High accuracy data (Customer Churn). These datasets were analyzed for the dependency of accuracy and F1-score on input attributes such as Sample sizes, Information gain methodology, minimum samples and tree depth inputs.
+
+First, the influential or important features among all the input attributes were determined for accuracy and F1-score, through backward selection techniques. Metrics considered were RMSE, r squared and P-value. Once the attributes were selected, a general linear model was created and visualized. 
+
+
+```{r , echo=FALSE}
+## Regression
+
+data2 <- datafull
+
+# Identifying factors
+data2['method'] <- factor(datafull$method)
+
+# Selecting datasets
+data2 <- data2 %>% 
+  filter(Name == 'Wine') %>% 
+  select(custom_acc, depth, Sample_size, min_samples, method)
+
+## Identify useful features contributing to variance through cross validation
+train_control = trainControl(method="cv", number=5)
+formula = custom_acc ~ .
+
+# Backwards selection
+model_estimate = train(formula, data=data2,
+                       method="leapBackward", trControl=train_control)
+
+#model_estimate
+#summary(model_estimate)
+
+# Selection with P-value
+model_estimate = train(formula, data=data2,
+                       method="leapSeq", trControl=train_control)
+
+#model_estimate
+#summary(model_estimate)
+
+# Keeping the covariates with maximum impact on variance
+## General Linear Regression
+
+formula <- as.formula('custom_acc ~ Sample_size + depth')
+glm1 <- glm(formula, data=data2)
+#summary(glm1)
+Rsq <- postResample(pred = glm1$fitted.values, obs = data2$custom_acc)
+#Rsq[2]
+coefficients <- coef(glm1)
+pValue <- broom::tidy(glm1)$p.value
+
+plot1 <- ggplot(data2, aes(x = Sample_size, y = custom_acc)) +
+  geom_point(color = "skyblue", size = 3, alpha = 0.7) +
+  geom_abline(intercept = glm1$coefficients[1], slope = glm1$coefficients[2], linetype = "dashed", color = "red", linewidth = 1) +
+  labs(title = "Sample Size and Accuracy",
+       x = "Sample Size",
+       y = "Accuracy") +
+  theme_minimal()  # You can customize the theme further if needed
+
+plot2 <- ggplot(data2, aes(x = depth, y = custom_acc)) +
+  geom_point(color = "orange", size = 3, alpha = 0.7) +
+  geom_abline(intercept = glm1$coefficients[1], slope = glm1$coefficients[2], linetype = "dashed", color = "red", linewidth = 1) +
+  labs(title = "Depth and Accuracy",
+       x = "Tree Depth",
+       y = "Accuracy") +
+  theme_minimal()  # You can customize the theme further if needed
+
+combined_plot <- plot1 + plot2 + plot_layout( guides = 'collect')
+
+```
+```{r fig6, echo=FALSE, fig.width=8, fig.height=4, fig.cap="Depth and Sample size regressed on Accuracy", out.width="80%", fig.align='center'}
+
+print(combined_plot)
+```
+
+**Regression analysis of Accuracy**: Regression analysis was conducted to examine the impact of input attributes on model accuracy. Subset selection showed Sample size and depth as key covariates, although Information Gain method 'gini' was highlighted, the observed change in Root Mean Squared Error (RMSE) did not justify an increase in model complexity.
+
+The resulting model accounted for approximately 21% of the variance in the data (Rsquared: `r Rsq[2]`), with an associated RMSE of `r Rsq[1]`. The relatively low variance explained can be attributed to two primary factors:
+
+1. Small Sample Size: The limited size of the sample did not encompass enough variance to identify a robust trend.
+
+2. Minimal Shift in Accuracy: In a broader context, the marginal change in accuracy, as evidenced in the T-test section, indicates that accuracy is not strongly influenced by the considered input attributes.
+
+These factors collectively contribute to the modest impact of Sample Size and Depth on the model's accuracy. The observed coefficients (Sample size:`r coefficients[2]` and Depth: `r coefficients[3]`) reveal that Sample Size has a positive impact on the unit change in accuracy, while Depth has a negative impact. Although this might initially appear counter intuitive, our earlier exploratory analysis of the data shed light on the fact that accuracy was an unweighted metric. In datasets characterized by imbalanced classes, accuracy tends to improve with a decrease in model complexity. Further the p-value indicates that the effect of sample size (p-value `r pValue[2]`) is significant and considerable, while depth does not significantly impact accuracy (p-value `r pValue[3]`)
+
+These results align with our prior expectations regarding the relationship within these datasets. The positive influence of Sample Size on accuracy is consistent with the notion that larger sample sizes contribute positively to model performance. Simultaneously, the negative impact of Depth suggests that reducing the complexity of the model enhances accuracy, particularly in situations with imbalanced class distributions.
+
+```{r, echo=FALSE}
+## Regression
+
+data2 <- datafull
+
+# Identifying factors
+data2['method'] <- factor(datafull$method)
+
+# Selecting datasets
+data2 <- data2 %>% 
+  filter(Name == 'CustomerChurn') %>% 
+  select(f1_self, depth, Sample_size, min_samples, method)
+
+## Identify useful features contributing to variance through cross validation
+train_control = trainControl(method="cv", number=5)
+formula = f1_self ~ .
+
+# Backwards selection
+model_estimate = train(formula, data=data2,
+                       method="leapBackward", trControl=train_control)
+
+#model_estimate
+#summary(model_estimate)
+
+# Selection with P-value
+model_estimate = train(formula, data=data2,
+                       method="leapSeq", trControl=train_control)
+
+#model_estimate
+#summary(model_estimate)
+
+# Keeping the covariates with maximum impact on variance
+## General Linear Regression
+
+formula <- as.formula('f1_self ~ min_samples + Sample_size + depth')
+glm1 <- glm(formula, data=data2)
+#summary(glm1)
+Rsq <- postResample(pred = glm1$fitted.values, obs = data2$f1_self)
+#Rsq[2]
+coefficients <- coef(glm1)
+pValue <- broom::tidy(glm1)$p.value
+
+plot1 <- ggplot(data2, aes(x = min_samples, y = f1_self)) +
+  geom_point(color = "skyblue", size = 3, alpha = 0.7) +
+  geom_abline(intercept = glm1$coefficients[1], slope = glm1$coefficients[3], linetype = "dashed", color = "red", linewidth = 1) +
+  labs(title = "Minimum samples, Sample size and Depth with F1-score",
+       x = "Minimum samples",
+       y = "F1-score") +
+  theme_minimal()  # You can customize the theme further if needed
+
+plot2 <- ggplot(data2, aes(x = Sample_size, y = f1_self)) +
+  geom_point(color = "pink", size = 3, alpha = 0.7) +
+  geom_abline(intercept = glm1$coefficients[1], slope = glm1$coefficients[3], linetype = "dashed", color = "red", linewidth = 1) +
+  labs(x = "Sample Size",
+       y = "F1-score") +
+  theme_minimal()  # You can customize the theme further if needed
+
+plot3 <- ggplot(data2, aes(x = depth, y = f1_self)) +
+  geom_point(color = "lightgreen", size = 3, alpha = 0.7) +
+  geom_abline(intercept = glm1$coefficients[1], slope = glm1$coefficients[4], linetype = "dashed", color = "red", linewidth = 1) +
+  labs(x = "Tree Depth",
+       y = "F1-Score") +
+  theme_minimal()  # You can customize the theme further if needed
+
+combined_plot <- plot1 + plot2 + plot3 + plot_layout( guides = 'collect')
+
+```
+**Regression analysis of F1-score**: Regression analysis was conducted to examine the impact of key input attributes on model F1-score of Customer Churn dataset. The key covariates identified through subset selection were Minimum samples, samples size and tree depth.
+
+```{r fig7, echo=FALSE, fig.width=10, fig.height=4, fig.cap="Depth and Sample size regressed on F1-score", out.width="100%"}
+
+print(combined_plot)
+```
+
+The resulting model accounted for approximately 60% of the variance in the data (Rsquared: `r Rsq[2]`), with an associated RMSE of `r Rsq[1]`. Regression model performed comparatively better than the accuracy model. The lack of variance explained can be attributed to a limited sampling size which did not encompass enough variance to identify a robust trend.
+
+The observed coefficients (Minimum samples:`r coefficients[2]`, Sample size:`r coefficients[3]` and Depth: `r coefficients[4]`) reveal that Minimum samples has a negative impact, where as sample size and Depth have a positive impact on the unit change in F1-score. They are significant with pvalues: `r pValue[2:4]`. These results align with our prior expectations regarding the relationship within these datasets. The positive influence of Sample Size and Depth on F1-score is consistent with the notion that an increase in complexity parameters will contribute positively to weighted model performance metrics. Simultaneously, the negative impact of Minimum samples suggests that reducing the complexity of the model increases generalization and costs us the gain in weighted evaluation metrics.
+
+
+
+# 4. Conclusion
+
+In this study, a comprehensive evaluation of a custom decision tree classifier was conducted, comparing its performance to the decision tree classifier from the SKlearn library across multiple datasets. The primary objective of this study was to assess the efficacy of the custom decision tree classifier and understand how its performance compares to the widely-used SKlearn decision tree classifier. The research addressed the challenge of achieving accurate and efficient classification across datasets of varying sizes and complexities.
+
+The custom implementation demonstrated consistent performance across diverse datasets, showcasing that while the parameters of classification impact evaluation metrics to some extent, they were not significantly impacted by variable types (quantitative, binary or multiclass categorical), dataset attributes (size and features), or the information gain method used. Pivotal impact was held by the intrinsic properties of the dataset and the capacity of its feature to represent classification outcomes. The focus on F1-score highlighted the weighted impact of classes, and the balance between precision and recall estimates, offering a representative measure of the model's overall effectiveness. It was higlhighted at many instances that the accuracy metric is not appropriate in many conditions such as in imbalanced classes or multiclass problems, and metrics such as F1-score and Matthew's correlation may perform better in such cases.
+
+A detailed analysis revealed marginal differences in outcomes between the custom and SKlearn classifiers. Despite these differences, the performance of the custom classifier closely aligned with the SKlearn classifier under comparable settings. While the custom classifier exhibited longer training times compared to SKlearn, the difference was consistent across datasets and did not significantly impact performance. The findings emphasize the importance of considering both evaluation and computational metrics when assessing classifier performance. As such, results support the viability of custom classifier for 'best fit' classification without pruning
+
+Through a detailed comparison of custom classifier's results, it was established that increasing tree depth demonstrated a small impact on evaluation metrics but had a greater impact on computational properties, creating a continuous rise in training time and memory utilization, indicating a trade-off between complexity and computational efficiency. The examination of tree depths across datasets revealed nuanced trends, emphasizing the importance of selecting optimal depth values to prevent overfitting and achieve efficient model performance. A detailed exploration of the impact of depth and minimum samples on evaluation metrics provided insights into achieving a trade-off between complexity and generalization. 
+
+Summarily, this study contributes valuable insights into the performance of a custom decision tree classifier, offering a nuanced understanding of its strengths, limitations, and areas for improvement. Results highlight the critical role of model complexity in achieving balanced and efficient classification. Both underfitting and overfitting were observed, emphasizing the need for thoughtful parameter selection to achieve good metrics and to balance dataset nuances without overfitting. The trade-off in computational efficiency did not significantly impact overall performance, despite longer training times, the custom classifier remains a viable option for classification tasks. In future, exploring pruning techniques and ensemble methods such as random forests, could enhance the computational efficiency of the custom decision tree.
+
+\newpage
+
+# 5. Appendix
+
+```{r, echo=FALSE}
+### Appendix : Detailed Evaluation of Metrics Across Tree Depths
+# Adding columns computing differences
+# 1. Summarize accross Dataset and Sample size
+
+datasets <- c("Wine", "CustomerChurn", "HCV", "Hypothyroid")
+
+# Initialize an empty dataframe to store the results
+result_data <- data.frame()
+
+for (dataset in datasets){
+  data = datafull %>%
+    filter(Name == dataset) %>%
+    group_by(depth) %>%
+    summarise(Dataset = first(Name),
+              Features = first(features),
+              Accuracy = mean(custom_acc),
+              F1score = mean(f1_self),
+              MCC = mean(mcc_self),
+              Time = mean(time_diff),
+              Memory = mean(mem_tree),
+              Similarity = mean(prediction_acc))
+  
+  result_data <- rbind(result_data,data)
+  
+}
+
+# Print the final table
+kable(result_data, digits = 3, format = "latex", booktabs = TRUE, align = "c",
+      caption = "Detailed Evaluation of Metrics Across Tree Depths",
+      label = "tab:table9") %>% 
+  kable_styling(full_width = FALSE,  latex_options = "hold_position")
+
+```
+
+\newpage
+
+# 6. References
+
+
+
