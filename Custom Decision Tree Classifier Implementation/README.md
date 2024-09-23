@@ -4,4 +4,4 @@ This work delves into the creation and comprehensive evaluation of a custom deci
 
 Comparative analysis revealed marginal differences, approximately within a 1% range, between the out- comes of the custom and SKlearn classifiers. Notably, prediction similarity stands at around 98%, indicating closely aligned performances. A detailed exploration of the impact of input parameters reveals that sample size, depth and minimum samples criteria have some impact on evaluation metrics, but a greater impact on training time and memory utilization. The robustness of findings is supported by statistical analyses throughout the study, informing the significance of observed changes. Lastly, this study brings focus to optimal configurations for custom classifiers, highlighting the delicate balance between capturing dataset nuances and preventing over fitting.
 
-#### Keywords: Python, Statistical Analysis, SKlearn
+#### Keywords: Python, Statistical Analysis, SKlearn, Language R, R Studio, Data Visualisation, Latex, Report Writing
